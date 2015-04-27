@@ -53,7 +53,7 @@ struct program {
     struct {
         enum ins ins;
         long value;
-    } *instructions;
+    } *ins;
     size_t markers_max, markers_count;
     long *markers;
 };
@@ -72,7 +72,7 @@ void program_print(const struct program *);
 void
 program_free(struct program *p)
 {
-    free(p->instructions);
+    free(p->ins);
     free(p->markers);
 }
 
@@ -84,15 +84,15 @@ program_add(struct program *p, enum ins ins, long value)
             p->max = 256;
         else
             p->max *= 2;
-        size_t size = sizeof(p->instructions[0]) * p->max;
-        p->instructions = realloc(p->instructions, size);
+        size_t size = sizeof(p->ins[0]) * p->max;
+        p->ins = realloc(p->ins, size);
     }
     switch (ins) {
     case INS_JUMP:
         value = program_unmark(p);
         if (value < 0)
             FATAL("unmatched ']'");
-        p->instructions[value].value = p->count + 1;
+        p->ins[value].value = p->count + 1;
         break;
     case INS_BRANCH:
         program_mark(p);
@@ -107,8 +107,8 @@ program_add(struct program *p, enum ins ins, long value)
         /* Nothing */
         break;
     }
-    p->instructions[p->count].ins = ins;
-    p->instructions[p->count].value = value;
+    p->ins[p->count].ins = ins;
+    p->ins[p->count].value = value;
     p->count++;
 }
 
@@ -179,17 +179,27 @@ void
 program_optimize(struct program *p)
 {
     for (size_t i = 0; i < p->count; i++) {
-        size_t f = i + 1;
-        switch (p->instructions[i].ins) {
+        switch (p->ins[i].ins) {
         case INS_MUTATE:
-        case INS_MOVE:
-            while (p->instructions[i].ins == p->instructions[f].ins) {
-                p->instructions[f].ins = INS_NOP;
-                p->instructions[i].value += p->instructions[f].value;
+        case INS_MOVE: {
+            size_t f = i + 1;
+            while (p->ins[i].ins == p->ins[f].ins) {
+                p->ins[f].ins = INS_NOP;
+                p->ins[i].value += p->ins[f].value;
                 f++;
             }
-            break;
+        } break;
         case INS_BRANCH:
+            /* Look for [-] or [+]. */
+            if (p->ins[i + 1].ins == INS_MUTATE &&
+                ((p->ins[i + 1].value == -1) || (p->ins[i + 1].value == 1)) &&
+                p->ins[i + 2].ins == INS_JUMP) {
+                p->ins[i].ins = INS_SET;
+                p->ins[i].value = 0;
+                p->ins[i + 1].ins = INS_NOP;
+                p->ins[i + 2].ins = INS_NOP;
+            }
+            break;
         case INS_JUMP:
         case INS_IN:
         case INS_OUT:
@@ -207,8 +217,8 @@ program_print(const struct program *p)
 {
     for (size_t i = 0; i < p->count; i++) {
         printf("%08ld  ", i);
-        long value = p->instructions[i].value;
-        enum ins ins = p->instructions[i].ins;
+        long value = p->ins[i].value;
+        enum ins ins = p->ins[i].ins;
         if (instruction_arity(ins) == 1)
             printf("%-12s%ld\n", instruction_name(ins), value);
         else
@@ -231,8 +241,8 @@ void
 interpret(struct interpeter *machine, const struct program *program)
 {
     for (;;) {
-        enum ins ins = program->instructions[machine->ip].ins;
-        long value = program->instructions[machine->ip].value;
+        enum ins ins = program->ins[machine->ip].ins;
+        long value = program->ins[machine->ip].value;
         machine->ip++;
         //printf("(%ld) %s %ld\n", machine->ip, instruction_name(ins), value);
         switch (ins) {
@@ -342,8 +352,8 @@ compile(const struct program *program, enum mode mode)
 
     uint32_t *table = malloc(sizeof(table[0]) * program->count);
     for (size_t i = 0; i < program->count; i++) {
-        enum ins ins = program->instructions[i].ins;
-        long value = program->instructions[i].value;
+        enum ins ins = program->ins[i].ins;
+        long value = program->ins[i].value;
         table[i] = buf->fill;
         switch (ins) {
         case INS_MOVE:
