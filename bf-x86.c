@@ -1,9 +1,11 @@
 #define _BSD_SOURCE  // MAP_ANONYMOUS
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
 #include <unistd.h>
+#include <getopt.h>
 #include <sys/mman.h>
 #include <elf.h>
 
@@ -305,7 +307,7 @@ asmbuf_immediate(struct asmbuf *buf, int size, const void *value)
 }
 
 enum mode {
-    MODE_FUNCTION, MODE_STANDALONE
+    MODE_OPEN, MODE_FUNCTION, MODE_STANDALONE
 };
 
 struct asmbuf *compile(const struct program *, enum mode);
@@ -460,28 +462,85 @@ elf_write(struct asmbuf *buf, FILE *elf)
     fwrite(buf->code, buf->fill, 1, elf);
 }
 
+void
+print_help(const char *argv0, FILE *o)
+{
+    fprintf(o, "Usage: %s [-o <file>] [-i] [-e] [-h]\n", argv0);
+    fprintf(o, "  -e           no output file, execute program\n");
+    fprintf(o, "  -h           print this usage information\n");
+    fprintf(o, "  -i           no output file, interpret program (slow)\n");
+    fprintf(o, "  -o <file>    executable output file name\n");
+    fprintf(o, "  -D           debugging listing\n");
+}
+
 int
 main(int argc, char **argv)
 {
+    /* Options */
+    const char *output = NULL;
+    bool do_exec = false;
+    bool do_interpret = false;
+    bool do_debug = false;
+
+    /* Parse arguments */
+    int option;
+    while ((option = getopt(argc, argv, "o:eiDh")) != -1) {
+        switch (option) {
+        case 'o':
+            output = optarg;
+            break;
+        case 'e':
+            do_exec = true;
+            break;
+        case 'i':
+            do_interpret = true;
+            break;
+        case 'D':
+            do_debug = true;
+            break;
+        case 'h':
+            print_help(argv[0], stdout);
+            break;
+        default:
+            print_help(argv[0], stderr);
+            FATAL("invalid option");
+        }
+    }
+
+    /* Validate arguments. */
+    if (optind >= argc)
+        FATAL("no input files");
+    else if (optind != argc - 1)
+        FATAL("too many input files");
+    else if (!do_interpret && !do_exec && output == NULL)
+        FATAL("no output file specified");
+
     struct program program = PROGRAM_INIT;
-    FILE *source = fopen(argv[argc - 1], "r");
+    FILE *source = fopen(argv[optind], "r");
+    if (source == NULL)
+        FATAL("could not open input file");
     program_parse(&program, source);
     program_optimize(&program);
     fclose(source);
-    //program_print(&program);
 
-    //interpret(&INTERPRETER, &program);
+    if (do_debug)
+        program_print(&program);
 
-    struct asmbuf *buf = compile(&program, MODE_STANDALONE);
-    FILE *dump = fopen("dump", "wb");
-    //fwrite(buf->code, buf->fill, 1, dump);
-    elf_write(buf, dump);
-    fclose(dump);
-    //void (*run)(void) = (void *)buf->code;
-    //run();
-    asmbuf_free(buf);
+    if (do_interpret) {
+        interpret(&INTERPRETER, &program);
+    } else if (do_exec) {
+        struct asmbuf *buf = compile(&program, MODE_FUNCTION);
+        void (*run)(void) = (void *)buf->code;
+        run();
+        asmbuf_free(buf);
+    } else {
+        struct asmbuf *buf = compile(&program, MODE_STANDALONE);
+        FILE *elf = fopen(output, "wb");
+        elf_write(buf, elf);
+        fclose(elf);
+        asmbuf_free(buf);
+    }
 
     program_free(&program);
-    printf("DONE\n");
     return 0;
 }
