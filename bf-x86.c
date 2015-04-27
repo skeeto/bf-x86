@@ -276,7 +276,7 @@ asmbuf_create(void)
     long page_size = sysconf(_SC_PAGESIZE);
     int prot = PROT_READ | PROT_WRITE;
     int flags = MAP_ANONYMOUS | MAP_PRIVATE;
-    size_t size = page_size * 256;
+    size_t size = page_size * 1024;
     struct asmbuf *buf = mmap(NULL, size, prot, flags, -1, 0);
     buf->size = size;
     return buf;
