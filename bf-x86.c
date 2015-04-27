@@ -28,6 +28,7 @@ enum ins {
     INS_JUMP,
     INS_BRANCH,
     INS_HALT,
+    INS_SET,
     INS_NOP
 };
 
@@ -35,7 +36,7 @@ const char *
 instruction_name(enum ins ins)
 {
     static const char *const names[] = {
-        "MOVE", "MUTATE", "IN", "OUT", "JUMP", "BRANCH", "HALT", "NOP"
+        "MOVE", "MUTATE", "IN", "OUT", "JUMP", "BRANCH", "HALT", "SET", "NOP"
     };
     return names[ins];
 }
@@ -43,7 +44,7 @@ instruction_name(enum ins ins)
 int
 instruction_arity(enum ins ins)
 {
-    static const int arity[] = {1, 1, 0 ,0, 1, 1, 0, 0};
+    static const int arity[] = {1, 1, 0 ,0, 1, 1, 0, 1, 0};
     return arity[ins];
 }
 
@@ -96,6 +97,7 @@ program_add(struct program *p, enum ins ins, long value)
     case INS_BRANCH:
         program_mark(p);
         break;
+    case INS_SET:
     case INS_MUTATE:
     case INS_MOVE:
     case INS_IN:
@@ -191,6 +193,7 @@ program_optimize(struct program *p)
         case INS_JUMP:
         case INS_IN:
         case INS_OUT:
+        case INS_SET:
         case INS_NOP:
         case INS_HALT:
             /* Nothing */
@@ -253,6 +256,9 @@ interpret(struct interpeter *machine, const struct program *program)
                 machine->ip = value;
             break;
         case INS_NOP:
+            break;
+        case INS_SET:
+            machine->memory[machine->dp] = value;
             break;
         case INS_HALT:
             return;
@@ -356,6 +362,10 @@ compile(const struct program *program, enum mode mode)
                 value *= -1;
                 asmbuf_ins(buf, 2, 0x802E); // sub  byte [rsi], X
             }
+            asmbuf_immediate(buf, 1, &value);
+            break;
+        case INS_SET:
+            asmbuf_ins(buf, 2, 0xC606); // mov  byte [rsi], X
             asmbuf_immediate(buf, 1, &value);
             break;
         case INS_IN:
