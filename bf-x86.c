@@ -13,10 +13,11 @@
 
 #define MEMORY_SIZE 30000
 
-#define FATAL(message)                          \
-    do {                                        \
-        fprintf(stderr, "%s\n", message);       \
-        exit(EXIT_FAILURE);                     \
+const char *program_name = "bf-x86";
+#define FATAL(message)                                            \
+    do {                                                          \
+        fprintf(stderr, "%s: %s\n", program_name, message);       \
+        exit(EXIT_FAILURE);                                       \
     } while (0)
 
 enum ins {
@@ -480,6 +481,7 @@ int
 main(int argc, char **argv)
 {
     /* Options */
+    program_name = argv[0];
     char *output = NULL;
     char *input = NULL;
     bool do_exec = false;
@@ -550,6 +552,8 @@ main(int argc, char **argv)
     } else {
         struct asmbuf *buf = compile(&program, MODE_STANDALONE);
         FILE *elf = fopen(output, "wb");
+        if (elf == NULL)
+            FATAL("could not open output file");
         elf_write(buf, elf);
         fchmod(fileno(elf), 0755);
         fclose(elf);
