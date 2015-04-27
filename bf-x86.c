@@ -479,7 +479,8 @@ int
 main(int argc, char **argv)
 {
     /* Options */
-    const char *output = NULL;
+    char *output = NULL;
+    char *input = NULL;
     bool do_exec = false;
     bool do_interpret = false;
     bool do_debug = false;
@@ -508,14 +509,24 @@ main(int argc, char **argv)
             FATAL("invalid option");
         }
     }
-
-    /* Validate arguments. */
     if (optind >= argc)
         FATAL("no input files");
     else if (optind != argc - 1)
         FATAL("too many input files");
-    else if (!do_interpret && !do_exec && output == NULL)
-        FATAL("no output file specified");
+    input = argv[optind];
+
+    char output_buf[1024];
+    if (!do_interpret && !do_exec && output == NULL) {
+        snprintf(output_buf, sizeof(output_buf), "%s", input);
+        output = output_buf;
+        char *p = output + strlen(output);
+        while (*p != '.' && p >= output)
+            p--;
+        if (p < output)
+            FATAL("no output file specified");
+        else
+            *p = '\0';
+    }
 
     struct program program = PROGRAM_INIT;
     FILE *source = fopen(argv[optind], "r");
