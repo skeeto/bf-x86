@@ -66,7 +66,7 @@ long program_unmark(struct program *);
 void program_add(struct program *, enum ins, long);
 void program_free(struct program *);
 void program_parse(struct program *, FILE *);
-void program_optimize(struct program *);
+void program_optimize(struct program *, int level);
 void program_print(const struct program *);
 
 void
@@ -176,28 +176,35 @@ program_parse(struct program *p, FILE *in)
 }
 
 void
-program_optimize(struct program *p)
+program_optimize(struct program *p, int level)
 {
     for (size_t i = 0; i < p->count; i++) {
         switch (p->ins[i].ins) {
         case INS_MUTATE:
         case INS_MOVE: {
-            size_t f = i + 1;
-            while (p->ins[i].ins == p->ins[f].ins) {
-                p->ins[f].ins = INS_NOP;
-                p->ins[i].value += p->ins[f].value;
-                f++;
+            if (level >= 1) {
+                size_t f = i + 1;
+                while (p->ins[i].ins == p->ins[f].ins) {
+                    p->ins[f].ins = INS_NOP;
+                    p->ins[i].value += p->ins[f].value;
+                    f++;
+                }
             }
         } break;
         case INS_BRANCH:
-            /* Look for [-] or [+]. */
-            if (p->ins[i + 1].ins == INS_MUTATE &&
-                ((p->ins[i + 1].value == -1) || (p->ins[i + 1].value == 1)) &&
-                p->ins[i + 2].ins == INS_JUMP) {
-                p->ins[i].ins = INS_SET;
-                p->ins[i].value = 0;
-                p->ins[i + 1].ins = INS_NOP;
-                p->ins[i + 2].ins = INS_NOP;
+            if (level >= 2) {
+                /* Look for [-] or [+]. */
+                enum ins i1 = p->ins[i + 1].ins;
+                enum ins i2 = p->ins[i + 2].ins;
+                long v1 = p->ins[i + 1].value;
+                if (v1 < 1)
+                    v1 *= -1;
+                if (i1 == INS_MUTATE && v1 == 1 && i2 == INS_JUMP) {
+                    p->ins[i].ins = INS_SET;
+                    p->ins[i].value = 0;
+                    p->ins[i + 1].ins = INS_NOP;
+                    p->ins[i + 2].ins = INS_NOP;
+                }
             }
             break;
         case INS_JUMP:
@@ -489,11 +496,12 @@ elf_write(struct asmbuf *buf, FILE *elf)
 void
 print_help(const char *argv0, FILE *o)
 {
-    fprintf(o, "Usage: %s [-o <file>] [-i] [-e] [-h]\n", argv0);
-    fprintf(o, "  -e           no output file, execute program\n");
-    fprintf(o, "  -h           print this usage information\n");
-    fprintf(o, "  -i           no output file, interpret program (slow)\n");
+    fprintf(o, "Usage: %s [-o <file>] [-i] [-e] [-h] [-O <n>]\n", argv0);
     fprintf(o, "  -o <file>    executable output file name\n");
+    fprintf(o, "  -O <level>   optimization level\n");
+    fprintf(o, "  -e           no output file, execute program\n");
+    fprintf(o, "  -i           no output file, interpret program (slow)\n");
+    fprintf(o, "  -h           print this usage information\n");
     fprintf(o, "  -D           debugging listing\n");
 }
 
@@ -507,13 +515,17 @@ main(int argc, char **argv)
     bool do_exec = false;
     bool do_interpret = false;
     bool do_debug = false;
+    int optimize = 3;
 
     /* Parse arguments */
     int option;
-    while ((option = getopt(argc, argv, "o:eiDh")) != -1) {
+    while ((option = getopt(argc, argv, "o:eiDhO:")) != -1) {
         switch (option) {
         case 'o':
             output = optarg;
+            break;
+        case 'O':
+            optimize = atoi(optarg);
             break;
         case 'e':
             do_exec = true;
@@ -556,7 +568,7 @@ main(int argc, char **argv)
     if (source == NULL)
         FATAL("could not open input file");
     program_parse(&program, source);
-    program_optimize(&program);
+    program_optimize(&program, optimize);
     fclose(source);
 
     if (do_debug)
