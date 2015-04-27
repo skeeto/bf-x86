@@ -5,6 +5,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <elf.h>
 
 #define MEMORY_SIZE 30000
 
@@ -52,13 +53,15 @@ struct program {
 };
 
 #define PROGRAM_INIT {0}
+#define PROGRAM (struct program){0}
 
 void program_mark(struct program *);
 long program_unmark(struct program *);
 void program_add(struct program *, enum ins, long);
 void program_free(struct program *);
 void program_parse(struct program *, FILE *);
-void program_print(struct program *);
+void program_optimize(struct program *);
+void program_print(const struct program *);
 
 void
 program_free(struct program *p)
@@ -166,7 +169,33 @@ program_parse(struct program *p, FILE *in)
 }
 
 void
-program_print(struct program *p)
+program_optimize(struct program *p)
+{
+    for (size_t i = 0; i < p->count; i++) {
+        size_t f = i + 1;
+        switch (p->instructions[i].ins) {
+        case INS_MUTATE:
+        case INS_MOVE:
+            while (p->instructions[i].ins == p->instructions[f].ins) {
+                p->instructions[f].ins = INS_NOP;
+                p->instructions[i].value += p->instructions[f].value;
+                f++;
+            }
+            break;
+        case INS_BRANCH:
+        case INS_JUMP:
+        case INS_IN:
+        case INS_OUT:
+        case INS_NOP:
+        case INS_HALT:
+            /* Nothing */
+            break;
+        }
+    }
+}
+
+void
+program_print(const struct program *p)
 {
     for (size_t i = 0; i < p->count; i++) {
         printf("%08ld  ", i);
@@ -186,11 +215,12 @@ struct interpeter {
 };
 
 #define INTERPRETER_INIT {0}
+#define INTERPRETER (struct interpeter){0}
 
-void interpret(struct interpeter *, struct program *);
+void interpret(struct interpeter *, const struct program *);
 
 void
-interpret(struct interpeter *machine, struct program *program)
+interpret(struct interpeter *machine, const struct program *program)
 {
     for (;;) {
         enum ins ins = program->instructions[machine->ip].ins;
@@ -278,7 +308,7 @@ enum mode {
     MODE_FUNCTION, MODE_STANDALONE
 };
 
-struct asmbuf * compile(const struct program *, enum mode);
+struct asmbuf *compile(const struct program *, enum mode);
 
 struct asmbuf *
 compile(const struct program *program, enum mode mode)
@@ -368,24 +398,87 @@ compile(const struct program *program, enum mode mode)
     return buf;
 }
 
+void
+elf_write(struct asmbuf *buf, FILE *elf)
+{
+    uint64_t entry = 0x400000;
+    char strtab[] = ".text\0.shstrtab\0";
+    Elf64_Ehdr header = {
+        .e_ident = {
+            ELFMAG0, ELFMAG1, ELFMAG2, ELFMAG3,
+            ELFCLASS64,
+            ELFDATA2LSB,
+            EV_CURRENT,
+            ELFOSABI_SYSV,
+        },
+        .e_type = ET_EXEC,
+        .e_machine = EM_X86_64,
+        .e_version = EV_CURRENT,
+        .e_entry = entry,
+        .e_phoff = sizeof(Elf64_Ehdr),
+        .e_shoff = sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr),
+        .e_ehsize = sizeof(Elf64_Ehdr),
+        .e_phentsize = sizeof(Elf64_Phdr),
+        .e_phnum = 1,
+        .e_shentsize = sizeof(Elf64_Shdr),
+        .e_shnum = 2,
+        .e_shstrndx = 0
+    };
+    Elf64_Phdr phdr = {
+        .p_type = PT_LOAD,
+        .p_flags = PF_X | PF_R,
+        .p_vaddr = entry,
+        .p_paddr = entry,
+        .p_filesz = buf->fill,
+        .p_memsz = buf->fill,
+        .p_align = 0x200000
+    };
+    Elf64_Shdr shdr[2] = {
+        {
+            .sh_name = 6,
+            .sh_type = SHT_STRTAB,
+            .sh_offset = sizeof(header) + sizeof(phdr) + sizeof(shdr),
+            .sh_size = sizeof(strtab),
+            .sh_addralign = 1
+        }, {
+            .sh_name = 0, // .text
+            .sh_type = SHT_PROGBITS,
+            .sh_flags = SHF_ALLOC | SHF_EXECINSTR,
+            .sh_addr = entry,
+            .sh_offset =
+              sizeof(header) + sizeof(phdr) + sizeof(shdr) + sizeof(strtab),
+            .sh_size = buf->fill,
+            .sh_addralign = 1
+        }
+    };
+    header.e_entry += shdr[1].sh_offset; // why?
+
+    fwrite(&header, sizeof(header), 1, elf);
+    fwrite(&phdr, sizeof(phdr), 1, elf);
+    fwrite(&shdr, sizeof(shdr), 1, elf);
+    fwrite(strtab, sizeof(strtab), 1, elf);
+    fwrite(buf->code, buf->fill, 1, elf);
+}
+
 int
 main(int argc, char **argv)
 {
     struct program program = PROGRAM_INIT;
     FILE *source = fopen(argv[argc - 1], "r");
     program_parse(&program, source);
+    program_optimize(&program);
     fclose(source);
     //program_print(&program);
 
-    //struct interpeter interpeter = INTERPRETER_INIT;
-    //interpret(&interpeter, &program);
+    //interpret(&INTERPRETER, &program);
 
-    struct asmbuf *buf = compile(&program, MODE_FUNCTION);
-    void (*run)(void) = (void *)buf->code;
-    //FILE *dump = fopen("dump", "wb");
+    struct asmbuf *buf = compile(&program, MODE_STANDALONE);
+    FILE *dump = fopen("dump", "wb");
     //fwrite(buf->code, buf->fill, 1, dump);
-    //fclose(dump);
-    run();
+    elf_write(buf, dump);
+    fclose(dump);
+    //void (*run)(void) = (void *)buf->code;
+    //run();
     asmbuf_free(buf);
 
     program_free(&program);
