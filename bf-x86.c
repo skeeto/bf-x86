@@ -1,4 +1,5 @@
 #define _BSD_SOURCE  // MAP_ANONYMOUS
+#define _POSIX_SOURCE  // fileno
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
@@ -6,6 +7,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <sys/stat.h>
 #include <sys/mman.h>
 #include <elf.h>
 
@@ -537,6 +539,7 @@ main(int argc, char **argv)
         struct asmbuf *buf = compile(&program, MODE_STANDALONE);
         FILE *elf = fopen(output, "wb");
         elf_write(buf, elf);
+        fchmod(fileno(elf), 0755);
         fclose(elf);
         asmbuf_free(buf);
     }
