@@ -1,4 +1,4 @@
-CFLAGS = -std=c11 -Wall -Wextra -O3 -fomit-frame-pointer -fPIC
+CFLAGS = -std=c11 -Wall -Wextra -O3 -fomit-frame-pointer -fPIC -g3
 
 programs = bf-x86 samples/hanoi samples/mandelbrot samples/hello
 
