@@ -29,7 +29,7 @@ enum ins {
     INS_JUMP,
     INS_BRANCH,
     INS_HALT,
-    INS_SET,
+    INS_CLEAR,
     INS_NOP
 };
 
@@ -98,7 +98,7 @@ program_add(struct program *p, enum ins ins, long value)
     case INS_BRANCH:
         program_mark(p);
         break;
-    case INS_SET:
+    case INS_CLEAR:
     case INS_MUTATE:
     case INS_MOVE:
     case INS_IN:
@@ -201,8 +201,7 @@ program_optimize(struct program *p, int level)
                 if (v1 < 1)
                     v1 *= -1;
                 if (i1 == INS_MUTATE && v1 == 1 && i2 == INS_JUMP) {
-                    p->ins[i].ins = INS_SET;
-                    p->ins[i].value = 0;
+                    p->ins[i].ins = INS_CLEAR;
                     p->ins[i + 1].ins = INS_NOP;
                     p->ins[i + 2].ins = INS_NOP;
                 }
@@ -211,7 +210,7 @@ program_optimize(struct program *p, int level)
         case INS_JUMP:
         case INS_IN:
         case INS_OUT:
-        case INS_SET:
+        case INS_CLEAR:
         case INS_NOP:
         case INS_HALT:
             /* Nothing */
@@ -275,8 +274,8 @@ interpret(struct interpeter *machine, const struct program *program)
             break;
         case INS_NOP:
             break;
-        case INS_SET:
-            machine->memory[machine->dp] = value;
+        case INS_CLEAR:
+            machine->memory[machine->dp] = 0;
             break;
         case INS_HALT:
             return;
@@ -396,9 +395,8 @@ compile(const struct program *program, enum mode mode)
             }
             asmbuf_immediate(buf, 1, &value);
             break;
-        case INS_SET:
-            asmbuf_ins(buf, 2, 0xC606); // mov  byte [rsi], X
-            asmbuf_immediate(buf, 1, &value);
+        case INS_CLEAR:
+            asmbuf_ins(buf, 3, 0xC60600); // mov  byte [rsi], 0
             break;
         case INS_IN:
             asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
