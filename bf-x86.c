@@ -37,7 +37,7 @@ const char *
 instruction_name(enum ins ins)
 {
     static const char *const names[] = {
-        "MOVE", "MUTATE", "IN", "OUT", "JUMP", "BRANCH", "HALT", "SET", "NOP"
+        "MOVE", "MUTATE", "IN", "OUT", "JUMP", "BRANCH", "HALT", "CLEAR", "NOP"
     };
     return names[ins];
 }
@@ -45,7 +45,7 @@ instruction_name(enum ins ins)
 int
 instruction_arity(enum ins ins)
 {
-    static const int arity[] = {1, 1, 0 ,0, 1, 1, 0, 1, 0};
+    static const int arity[] = {1, 1, 0 ,0, 1, 1, 0, 0, 0};
     return arity[ins];
 }
 
