@@ -191,6 +191,8 @@ program_optimize(struct program *p, int level)
                     f++;
                 }
             }
+            if (p->ins[i].value == 0)
+                p->ins[i].ins = INS_NOP;
         } break;
         case INS_BRANCH:
             if (level >= 2) {
