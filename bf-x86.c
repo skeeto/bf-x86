@@ -11,7 +11,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
-#include <elf.h>
+#include <elf_abi.h>
 
 #define MEMORY_SIZE 30000
 
@@ -628,10 +628,10 @@ elf_write(struct asmbuf *buf, FILE *elf)
             ELFCLASS64,
             ELFDATA2LSB,
             EV_CURRENT,
-            ELFOSABI_SYSV,
+            ELFOSABI_OPENBSD,
         },
         .e_type = ET_EXEC,
-        .e_machine = EM_X86_64,
+        .e_machine = EM_AMD64,
         .e_version = EV_CURRENT,
         .e_entry = entry,
         .e_phoff = sizeof(Elf64_Ehdr),
