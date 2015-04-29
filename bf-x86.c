@@ -225,13 +225,15 @@ void
 program_print(const struct program *p)
 {
     for (size_t i = 0; i < p->count; i++) {
-        printf("%08ld  ", i);
         long value = p->ins[i].value;
         enum ins ins = p->ins[i].ins;
-        if (instruction_arity(ins) == 1)
-            printf("%-12s%ld\n", instruction_name(ins), value);
-        else
-            printf("%s\n", instruction_name(ins));
+        if (ins != INS_NOP) {
+            printf("%08ld  ", i);
+            if (instruction_arity(ins) == 1)
+                printf("%-12s%ld\n", instruction_name(ins), value);
+            else
+                printf("%s\n", instruction_name(ins));
+        }
     }
 }
 
