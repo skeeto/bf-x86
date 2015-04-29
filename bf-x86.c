@@ -11,6 +11,10 @@
 #include <sys/mman.h>
 #include <elf.h>
 
+#define SYS_READ   0
+#define SYS_WRITE  1
+#define SYS_EXIT   60
+
 #define MEMORY_SIZE 30000
 
 const char *program_name = "bf-x86";
@@ -332,6 +336,20 @@ asmbuf_immediate(struct asmbuf *buf, int size, const void *value)
     buf->fill += size;
 }
 
+void
+asmbuf_syscall(struct asmbuf *buf, int syscall)
+{
+    if (syscall == 0) {
+        asmbuf_ins(buf, 3, 0x4831C0); // xor  rax, rax
+    } else {
+        asmbuf_ins(buf, 1, 0xB8);  // mov  rax, syscall
+        uint32_t n = syscall;
+        asmbuf_immediate(buf, 4, &n);
+    }
+    asmbuf_ins(buf, 2, 0x0F05);  // syscall
+
+}
+
 enum mode {
     MODE_OPEN, MODE_FUNCTION, MODE_STANDALONE
 };
@@ -386,14 +404,12 @@ compile(const struct program *program, enum mode mode)
             asmbuf_immediate(buf, 1, &value);
             break;
         case INS_IN:
-            asmbuf_ins(buf, 3, 0x4831C0); // xor  rax, rax
             asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
-            asmbuf_ins(buf, 2, 0x0F05);   // syscall
+            asmbuf_syscall(buf, SYS_READ);
             break;
         case INS_OUT:
-            asmbuf_ins(buf, 5, 0xB801000000); // mov  rax, 1
             asmbuf_ins(buf, 5, 0xBF01000000); // mov  rdi, 1
-            asmbuf_ins(buf, 2, 0x0F05); // syscall
+            asmbuf_syscall(buf, SYS_WRITE);
             break;
         case INS_BRANCH: {
             uint32_t delta = 0;
@@ -416,9 +432,8 @@ compile(const struct program *program, enum mode mode)
                 asmbuf_immediate(buf, 4, &memory_size);
                 asmbuf_ins(buf, 1, 0xC3); // ret
             } else if (mode == MODE_STANDALONE) {
-                asmbuf_ins(buf, 5, 0xB83C000000); // mov  rax, 1
                 asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
-                asmbuf_ins(buf, 2, 0x0F05); // syscall
+                asmbuf_syscall(buf, SYS_EXIT);
             }
             break;
         case INS_NOP:
