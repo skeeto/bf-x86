@@ -9,11 +9,8 @@
 #include <getopt.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/syscall.h>
 #include <elf.h>
-
-#define SYS_READ   0
-#define SYS_WRITE  1
-#define SYS_EXIT   60
 
 #define MEMORY_SIZE 30000
 
@@ -405,11 +402,11 @@ compile(const struct program *program, enum mode mode)
             break;
         case INS_IN:
             asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
-            asmbuf_syscall(buf, SYS_READ);
+            asmbuf_syscall(buf, SYS_read);
             break;
         case INS_OUT:
             asmbuf_ins(buf, 5, 0xBF01000000); // mov  rdi, 1
-            asmbuf_syscall(buf, SYS_WRITE);
+            asmbuf_syscall(buf, SYS_write);
             break;
         case INS_BRANCH: {
             uint32_t delta = 0;
@@ -433,7 +430,7 @@ compile(const struct program *program, enum mode mode)
                 asmbuf_ins(buf, 1, 0xC3); // ret
             } else if (mode == MODE_STANDALONE) {
                 asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
-                asmbuf_syscall(buf, SYS_EXIT);
+                asmbuf_syscall(buf, SYS_exit);
             }
             break;
         case INS_NOP:
