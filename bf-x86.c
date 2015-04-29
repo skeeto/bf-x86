@@ -295,6 +295,7 @@ void           asmbuf_free(struct asmbuf *);
 void           asmbuf_finalize(struct asmbuf *);
 void           asmbuf_ins(struct asmbuf *, int, uint64_t);
 void           asmbuf_immediate(struct asmbuf *, int, const void *);
+void           asmbuf_syscall(struct asmbuf *, int);
 
 struct asmbuf *
 asmbuf_create(void)
