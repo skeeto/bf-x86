@@ -1,4 +1,5 @@
-CFLAGS = -std=c99 -Wall -Wextra -O3 -fomit-frame-pointer -fPIC -g3
+CFLAGS = -std=c99 -Wall -Wextra -Wno-missing-field-initializers -g3 \
+  -O3 -fomit-frame-pointer -fPIC
 
 programs = bf-x86 samples/hanoi samples/mandelbrot samples/hello
 
