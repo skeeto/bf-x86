@@ -381,6 +381,10 @@ compile(const struct program *program, enum mode mode)
     asmbuf_immediate(buf, 4, &memory_size);
     asmbuf_ins(buf, 2, 0xF3AA); // rep stosb
 
+    /* rsi - data pointer
+     * rdi - syscall argument
+     * rax - temp
+     */
     uint32_t *table = malloc(sizeof(table[0]) * program->count);
     for (size_t i = 0; i < program->count; i++) {
         enum ins ins = program->ins[i].ins;
