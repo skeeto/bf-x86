@@ -70,7 +70,7 @@ void program_add(struct program *, enum ins, long);
 void program_free(struct program *);
 void program_parse(struct program *, FILE *);
 void program_optimize(struct program *, int level);
-void program_print(const struct program *);
+void program_print(const struct program *, FILE *);
 
 void
 program_free(struct program *p)
@@ -227,66 +227,62 @@ program_optimize(struct program *p, int level)
 }
 
 void
-program_print(const struct program *p)
+program_print(const struct program *p, FILE *out)
 {
     for (size_t i = 0; i < p->count; i++) {
         long operand = p->ins[i].operand;
         enum ins ins = p->ins[i].ins;
         if (ins != INS_NOP) {
-            printf("%08ld  ", i);
+            fprintf(out, "%08ld  ", i);
             if (instruction_arity(ins) == 1)
-                printf("%-12s%ld\n", instruction_name(ins), operand);
+                fprintf(out, "%-12s%ld\n", instruction_name(ins), operand);
             else
-                printf("%s\n", instruction_name(ins));
+                fprintf(out, "%s\n", instruction_name(ins));
         }
     }
 }
 
-struct interpeter {
-    long dp;
-    long ip;
-    uint8_t memory[MEMORY_SIZE];
-};
-
-#define INTERPRETER_INIT {0}
-#define INTERPRETER (struct interpeter){0}
-
-void interpret(struct interpeter *, const struct program *);
+void interpret(const struct program *, FILE *);
 
 void
-interpret(struct interpeter *machine, const struct program *program)
+interpret(const struct program *program, FILE *trace)
 {
+    long ip = 0;
+    long dp = 0;
+    uint8_t memory[MEMORY_SIZE] = {0};
     for (;;) {
-        enum ins ins = program->ins[machine->ip].ins;
-        long operand = program->ins[machine->ip].operand;
-        machine->ip++;
-        //printf("(%ld) %s %ld\n", machine->ip, instruction_name(ins), operand);
+        enum ins ins = program->ins[ip].ins;
+        long operand = program->ins[ip].operand;
+        if (trace != NULL) {
+            const char *name = instruction_name(ins);
+            fprintf(trace, "(%ld) %s %ld\n", ip, name, operand);
+        }
+        ip++;
         switch (ins) {
         case INS_MOVE:
-            machine->dp += operand;
+            dp += operand;
             break;
         case INS_MUTATE:
-            machine->memory[machine->dp] += operand;
+            memory[dp] += operand;
             break;
         case INS_IN:
-            machine->memory[machine->dp] = getchar();
+            memory[dp] = getchar();
             break;
         case INS_OUT:
-            putchar(machine->memory[machine->dp]);
+            putchar(memory[dp]);
             break;
         case INS_JUMP:
-            machine->ip = operand;
+            ip = operand;
             break;
         case INS_BRANCH:
-            if (machine->memory[machine->dp] == 0)
-                machine->ip = operand;
+            if (memory[dp] == 0)
+                ip = operand;
             break;
         case INS_CLEAR:
-            machine->memory[machine->dp] = 0;
+            memory[dp] = 0;
             break;
         case INS_COPY:
-            machine->memory[machine->dp + operand] =
-                machine->memory[machine->dp];
+            memory[dp + operand] = memory[dp];
             break;
         case INS_NOP:
             break;
@@ -602,10 +598,10 @@ main(int argc, char **argv)
     fclose(source);
 
     if (do_debug)
-        program_print(&program);
+        program_print(&program, stderr);
 
     if (do_interpret) {
-        interpret(&INTERPRETER, &program);
+        interpret(&program, do_debug ? stderr : NULL);
     } else if (do_exec) {
         struct asmbuf *buf = compile(&program, MODE_FUNCTION);
         void (*run)(void) = (void *)buf->code;
