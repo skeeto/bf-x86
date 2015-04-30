@@ -253,7 +253,7 @@ interpret(const struct program *program, FILE *trace)
     for (;;) {
         enum ins ins = program->ins[ip].ins;
         long operand = program->ins[ip].operand;
-        if (trace != NULL) {
+        if (trace != NULL && ins != INS_NOP) {
             const char *name = instruction_name(ins);
             fprintf(trace, "(%ld) %s %ld\n", ip, name, operand);
         }
