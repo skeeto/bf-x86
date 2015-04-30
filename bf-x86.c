@@ -26,10 +26,11 @@ enum ins {
     INS_MUTATE,
     INS_IN,
     INS_OUT,
-    INS_JUMP,
     INS_BRANCH,
+    INS_JUMP,
     INS_HALT,
     INS_CLEAR,
+    INS_COPY,
     INS_NOP
 };
 
@@ -37,7 +38,8 @@ const char *
 instruction_name(enum ins ins)
 {
     static const char *const names[] = {
-        "MOVE", "MUTATE", "IN", "OUT", "JUMP", "BRANCH", "HALT", "CLEAR", "NOP"
+        "MOVE", "MUTATE", "IN", "OUT", "BRANCH",
+        "JUMP", "HALT", "CLEAR", "COPY", "NOP"
     };
     return names[ins];
 }
@@ -53,7 +55,7 @@ struct program {
     size_t max, count;
     struct {
         enum ins ins;
-        long value;
+        long operand;
     } *ins;
     size_t markers_max, markers_count;
     long *markers;
@@ -78,7 +80,7 @@ program_free(struct program *p)
 }
 
 void
-program_add(struct program *p, enum ins ins, long value)
+program_add(struct program *p, enum ins ins, long operand)
 {
     if (p->count == p->max) {
         if (p->max == 0)
@@ -89,27 +91,29 @@ program_add(struct program *p, enum ins ins, long value)
         p->ins = realloc(p->ins, size);
     }
     switch (ins) {
-    case INS_JUMP:
-        value = program_unmark(p);
-        if (value < 0)
-            FATAL("unmatched ']'");
-        p->ins[value].value = p->count + 1;
-        break;
     case INS_BRANCH:
         program_mark(p);
         break;
-    case INS_CLEAR:
-    case INS_MUTATE:
+    case INS_JUMP: {
+        long sibling = program_unmark(p);
+        if (operand < 0)
+            FATAL("unmatched ']'");
+        p->ins[sibling].operand = p->count + 1;
+        operand = sibling;
+    } break;
     case INS_MOVE:
+    case INS_MUTATE:
     case INS_IN:
     case INS_OUT:
     case INS_HALT:
+    case INS_CLEAR:
+    case INS_COPY:
     case INS_NOP:
         /* Nothing */
         break;
     }
     p->ins[p->count].ins = ins;
-    p->ins[p->count].value = value;
+    p->ins[p->count].operand = operand;
     p->count++;
 }
 
@@ -181,17 +185,17 @@ program_optimize(struct program *p, int level)
 {
     for (size_t i = 0; i < p->count; i++) {
         switch (p->ins[i].ins) {
-        case INS_MUTATE:
-        case INS_MOVE: {
+        case INS_MOVE:
+        case INS_MUTATE: {
             if (level >= 1) {
                 size_t f = i + 1;
                 while (p->ins[i].ins == p->ins[f].ins) {
                     p->ins[f].ins = INS_NOP;
-                    p->ins[i].value += p->ins[f].value;
+                    p->ins[i].operand += p->ins[f].operand;
                     f++;
                 }
             }
-            if (p->ins[i].value == 0)
+            if (p->ins[i].operand == 0)
                 p->ins[i].ins = INS_NOP;
         } break;
         case INS_BRANCH:
@@ -199,7 +203,7 @@ program_optimize(struct program *p, int level)
                 /* Look for [-] or [+]. */
                 enum ins i1 = p->ins[i + 1].ins;
                 enum ins i2 = p->ins[i + 2].ins;
-                long v1 = p->ins[i + 1].value;
+                long v1 = p->ins[i + 1].operand;
                 if (v1 < 1)
                     v1 *= -1;
                 if (i1 == INS_MUTATE && v1 == 1 && i2 == INS_JUMP) {
@@ -209,12 +213,13 @@ program_optimize(struct program *p, int level)
                 }
             }
             break;
-        case INS_JUMP:
         case INS_IN:
         case INS_OUT:
-        case INS_CLEAR:
-        case INS_NOP:
+        case INS_JUMP:
         case INS_HALT:
+        case INS_CLEAR:
+        case INS_COPY:
+        case INS_NOP:
             /* Nothing */
             break;
         }
@@ -225,12 +230,12 @@ void
 program_print(const struct program *p)
 {
     for (size_t i = 0; i < p->count; i++) {
-        long value = p->ins[i].value;
+        long operand = p->ins[i].operand;
         enum ins ins = p->ins[i].ins;
         if (ins != INS_NOP) {
             printf("%08ld  ", i);
             if (instruction_arity(ins) == 1)
-                printf("%-12s%ld\n", instruction_name(ins), value);
+                printf("%-12s%ld\n", instruction_name(ins), operand);
             else
                 printf("%s\n", instruction_name(ins));
         }
@@ -253,15 +258,15 @@ interpret(struct interpeter *machine, const struct program *program)
 {
     for (;;) {
         enum ins ins = program->ins[machine->ip].ins;
-        long value = program->ins[machine->ip].value;
+        long operand = program->ins[machine->ip].operand;
         machine->ip++;
-        //printf("(%ld) %s %ld\n", machine->ip, instruction_name(ins), value);
+        //printf("(%ld) %s %ld\n", machine->ip, instruction_name(ins), operand);
         switch (ins) {
         case INS_MOVE:
-            machine->dp += value;
+            machine->dp += operand;
             break;
         case INS_MUTATE:
-            machine->memory[machine->dp] += value;
+            machine->memory[machine->dp] += operand;
             break;
         case INS_IN:
             machine->memory[machine->dp] = getchar();
@@ -270,16 +275,20 @@ interpret(struct interpeter *machine, const struct program *program)
             putchar(machine->memory[machine->dp]);
             break;
         case INS_JUMP:
-            machine->ip = value;
+            machine->ip = operand;
             break;
         case INS_BRANCH:
             if (machine->memory[machine->dp] == 0)
-                machine->ip = value;
-            break;
-        case INS_NOP:
+                machine->ip = operand;
             break;
         case INS_CLEAR:
             machine->memory[machine->dp] = 0;
+            break;
+        case INS_COPY:
+            machine->memory[machine->dp + operand] =
+                machine->memory[machine->dp];
+            break;
+        case INS_NOP:
             break;
         case INS_HALT:
             return;
@@ -379,26 +388,26 @@ compile(const struct program *program, enum mode mode)
     uint32_t *table = malloc(sizeof(table[0]) * program->count);
     for (size_t i = 0; i < program->count; i++) {
         enum ins ins = program->ins[i].ins;
-        long value = program->ins[i].value;
+        long operand = program->ins[i].operand;
         table[i] = buf->fill;
         switch (ins) {
         case INS_MOVE:
-            if (value > 0) {
+            if (operand > 0) {
                 asmbuf_ins(buf, 3, 0x4881C6); // add  rsi, X
             } else {
-                value *= -1;
+                operand *= -1;
                 asmbuf_ins(buf, 3, 0x4881EE); // sub  rsi, X
             }
-            asmbuf_immediate(buf, 4, &value);
+            asmbuf_immediate(buf, 4, &operand);
             break;
         case INS_MUTATE:
-            if (value > 0) {
+            if (operand > 0) {
                 asmbuf_ins(buf, 2, 0x8006); // add  byte [rsi], X
             } else {
-                value *= -1;
+                operand *= -1;
                 asmbuf_ins(buf, 2, 0x802E); // sub  byte [rsi], X
             }
-            asmbuf_immediate(buf, 1, &value);
+            asmbuf_immediate(buf, 1, &operand);
             break;
         case INS_CLEAR:
             asmbuf_ins(buf, 3, 0xC60600); // mov  byte [rsi], 0
@@ -418,13 +427,19 @@ compile(const struct program *program, enum mode mode)
             asmbuf_immediate(buf, 4, &delta); // patched by return JUMP ']'
         } break;
         case INS_JUMP: {
-            uint32_t delta = table[value];
+            uint32_t delta = table[operand];
             delta -= buf->fill + 5;
             asmbuf_ins(buf, 1, 0xE9); // jmp delta
             asmbuf_immediate(buf, 4, &delta);
-            void *jz = &buf->code[table[value] + 5];
-            uint32_t patch = buf->fill - table[value] - 9;
+            void *jz = &buf->code[table[operand] + 5];
+            uint32_t patch = buf->fill - table[operand] - 9;
             memcpy(jz, &patch, 4); // patch previous branch '['
+        } break;
+        case INS_COPY: {
+            asmbuf_ins(buf, 2, 0x8A06);  // mov  al, [rsi]
+            asmbuf_ins(buf, 2, 0x8886);  // mov  [rsi+delta], al
+            uint32_t delta = operand;
+            asmbuf_immediate(buf, 4, &delta);
         } break;
         case INS_HALT:
             if (mode == MODE_FUNCTION) {
