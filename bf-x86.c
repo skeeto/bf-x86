@@ -15,10 +15,10 @@
 #define MEMORY_SIZE 30000
 
 const char *program_name = "bf-x86";
-#define FATAL(message)                                            \
-    do {                                                          \
-        fprintf(stderr, "%s: %s\n", program_name, message);       \
-        exit(EXIT_FAILURE);                                       \
+#define FATAL(message)                                          \
+    do {                                                        \
+        fprintf(stderr, "%s: %s\n", program_name, message);     \
+        exit(EXIT_FAILURE);                                     \
     } while (0)
 
 enum ins {
@@ -91,26 +91,26 @@ program_add(struct program *p, enum ins ins, long operand)
         p->ins = realloc(p->ins, size);
     }
     switch (ins) {
-    case INS_BRANCH:
-        program_mark(p);
-        break;
-    case INS_JUMP: {
-        long sibling = program_unmark(p);
-        if (operand < 0)
-            FATAL("unmatched ']'");
-        p->ins[sibling].operand = p->count + 1;
-        operand = sibling;
-    } break;
-    case INS_MOVE:
-    case INS_MUTATE:
-    case INS_IN:
-    case INS_OUT:
-    case INS_HALT:
-    case INS_CLEAR:
-    case INS_COPY:
-    case INS_NOP:
-        /* Nothing */
-        break;
+        case INS_BRANCH:
+            program_mark(p);
+            break;
+        case INS_JUMP: {
+            long sibling = program_unmark(p);
+            if (operand < 0)
+                FATAL("unmatched ']'");
+            p->ins[sibling].operand = p->count + 1;
+            operand = sibling;
+        } break;
+        case INS_MOVE:
+        case INS_MUTATE:
+        case INS_IN:
+        case INS_OUT:
+        case INS_HALT:
+        case INS_CLEAR:
+        case INS_COPY:
+        case INS_NOP:
+            /* Nothing */
+            break;
     }
     p->ins[p->count].ins = ins;
     p->ins[p->count].operand = operand;
@@ -146,33 +146,33 @@ program_parse(struct program *p, FILE *in)
     int c;
     while ((c = fgetc(in)) != EOF) {
         switch (c) {
-        case '+':
-            program_add(p, INS_MUTATE, 1);
-            break;
-        case '-':
-            program_add(p, INS_MUTATE, -1);
-            break;
-        case '>':
-            program_add(p, INS_MOVE, 1);
-            break;
-        case '<':
-            program_add(p, INS_MOVE, -1);
-            break;
-        case '.':
-            program_add(p, INS_OUT, 0);
-            break;
-        case ',':
-            program_add(p, INS_IN, 0);
-            break;
-        case '[':
-            program_add(p, INS_BRANCH, 0);
-            break;
-        case ']':
-            program_add(p, INS_JUMP, 0);
-            break;
-        default:
-            /* Nothing */
-            break;
+            case '+':
+                program_add(p, INS_MUTATE, 1);
+                break;
+            case '-':
+                program_add(p, INS_MUTATE, -1);
+                break;
+            case '>':
+                program_add(p, INS_MOVE, 1);
+                break;
+            case '<':
+                program_add(p, INS_MOVE, -1);
+                break;
+            case '.':
+                program_add(p, INS_OUT, 0);
+                break;
+            case ',':
+                program_add(p, INS_IN, 0);
+                break;
+            case '[':
+                program_add(p, INS_BRANCH, 0);
+                break;
+            case ']':
+                program_add(p, INS_JUMP, 0);
+                break;
+            default:
+                /* Nothing */
+                break;
         }
     }
     if (p->markers_count > 0)
@@ -185,43 +185,43 @@ program_optimize(struct program *p, int level)
 {
     for (size_t i = 0; i < p->count; i++) {
         switch (p->ins[i].ins) {
-        case INS_MOVE:
-        case INS_MUTATE: {
-            if (level >= 1) {
-                size_t f = i + 1;
-                while (p->ins[i].ins == p->ins[f].ins) {
-                    p->ins[f].ins = INS_NOP;
-                    p->ins[i].operand += p->ins[f].operand;
-                    f++;
+            case INS_MOVE:
+            case INS_MUTATE: {
+                if (level >= 1) {
+                    size_t f = i + 1;
+                    while (p->ins[i].ins == p->ins[f].ins) {
+                        p->ins[f].ins = INS_NOP;
+                        p->ins[i].operand += p->ins[f].operand;
+                        f++;
+                    }
                 }
-            }
-            if (p->ins[i].operand == 0)
-                p->ins[i].ins = INS_NOP;
-        } break;
-        case INS_BRANCH:
-            if (level >= 2) {
-                /* Look for [-] or [+]. */
-                enum ins i1 = p->ins[i + 1].ins;
-                enum ins i2 = p->ins[i + 2].ins;
-                long v1 = p->ins[i + 1].operand;
-                if (v1 < 1)
-                    v1 *= -1;
-                if (i1 == INS_MUTATE && v1 == 1 && i2 == INS_JUMP) {
-                    p->ins[i].ins = INS_CLEAR;
-                    p->ins[i + 1].ins = INS_NOP;
-                    p->ins[i + 2].ins = INS_NOP;
+                if (p->ins[i].operand == 0)
+                    p->ins[i].ins = INS_NOP;
+            } break;
+            case INS_BRANCH:
+                if (level >= 2) {
+                    /* Look for [-] or [+]. */
+                    enum ins i1 = p->ins[i + 1].ins;
+                    enum ins i2 = p->ins[i + 2].ins;
+                    long v1 = p->ins[i + 1].operand;
+                    if (v1 < 1)
+                        v1 *= -1;
+                    if (i1 == INS_MUTATE && v1 == 1 && i2 == INS_JUMP) {
+                        p->ins[i].ins = INS_CLEAR;
+                        p->ins[i + 1].ins = INS_NOP;
+                        p->ins[i + 2].ins = INS_NOP;
+                    }
                 }
-            }
-            break;
-        case INS_IN:
-        case INS_OUT:
-        case INS_JUMP:
-        case INS_HALT:
-        case INS_CLEAR:
-        case INS_COPY:
-        case INS_NOP:
-            /* Nothing */
-            break;
+                break;
+            case INS_IN:
+            case INS_OUT:
+            case INS_JUMP:
+            case INS_HALT:
+            case INS_CLEAR:
+            case INS_COPY:
+            case INS_NOP:
+                /* Nothing */
+                break;
         }
     }
 }
@@ -259,35 +259,35 @@ interpret(const struct program *program, FILE *trace)
         }
         ip++;
         switch (ins) {
-        case INS_MOVE:
-            dp += operand;
-            break;
-        case INS_MUTATE:
-            memory[dp] += operand;
-            break;
-        case INS_IN:
-            memory[dp] = getchar();
-            break;
-        case INS_OUT:
-            putchar(memory[dp]);
-            break;
-        case INS_JUMP:
-            ip = operand;
-            break;
-        case INS_BRANCH:
-            if (memory[dp] == 0)
+            case INS_MOVE:
+                dp += operand;
+                break;
+            case INS_MUTATE:
+                memory[dp] += operand;
+                break;
+            case INS_IN:
+                memory[dp] = getchar();
+                break;
+            case INS_OUT:
+                putchar(memory[dp]);
+                break;
+            case INS_JUMP:
                 ip = operand;
-            break;
-        case INS_CLEAR:
-            memory[dp] = 0;
-            break;
-        case INS_COPY:
-            memory[dp + operand] = memory[dp];
-            break;
-        case INS_NOP:
-            break;
-        case INS_HALT:
-            return;
+                break;
+            case INS_BRANCH:
+                if (memory[dp] == 0)
+                    ip = operand;
+                break;
+            case INS_CLEAR:
+                memory[dp] = 0;
+                break;
+            case INS_COPY:
+                memory[dp + operand] = memory[dp];
+                break;
+            case INS_NOP:
+                break;
+            case INS_HALT:
+                return;
         }
     }
 }
@@ -391,68 +391,68 @@ compile(const struct program *program, enum mode mode)
         long operand = program->ins[i].operand;
         table[i] = buf->fill;
         switch (ins) {
-        case INS_MOVE:
-            if (operand > 0) {
-                asmbuf_ins(buf, 3, 0x4881C6); // add  rsi, X
-            } else {
-                operand *= -1;
-                asmbuf_ins(buf, 3, 0x4881EE); // sub  rsi, X
-            }
-            asmbuf_immediate(buf, 4, &operand);
-            break;
-        case INS_MUTATE:
-            if (operand > 0) {
-                asmbuf_ins(buf, 2, 0x8006); // add  byte [rsi], X
-            } else {
-                operand *= -1;
-                asmbuf_ins(buf, 2, 0x802E); // sub  byte [rsi], X
-            }
-            asmbuf_immediate(buf, 1, &operand);
-            break;
-        case INS_CLEAR:
-            asmbuf_ins(buf, 3, 0xC60600); // mov  byte [rsi], 0
-            break;
-        case INS_IN:
-            asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
-            asmbuf_syscall(buf, SYS_read);
-            break;
-        case INS_OUT:
-            asmbuf_ins(buf, 5, 0xBF01000000); // mov  rdi, 1
-            asmbuf_syscall(buf, SYS_write);
-            break;
-        case INS_BRANCH: {
-            uint32_t delta = 0;
-            asmbuf_ins(buf, 3, 0x803E00); // cmp  byte [rsi], 0
-            asmbuf_ins(buf, 2, 0x0F84);
-            asmbuf_immediate(buf, 4, &delta); // patched by return JUMP ']'
-        } break;
-        case INS_JUMP: {
-            uint32_t delta = table[operand];
-            delta -= buf->fill + 5;
-            asmbuf_ins(buf, 1, 0xE9); // jmp delta
-            asmbuf_immediate(buf, 4, &delta);
-            void *jz = &buf->code[table[operand] + 5];
-            uint32_t patch = buf->fill - table[operand] - 9;
-            memcpy(jz, &patch, 4); // patch previous branch '['
-        } break;
-        case INS_COPY: {
-            asmbuf_ins(buf, 2, 0x8A06);  // mov  al, [rsi]
-            asmbuf_ins(buf, 2, 0x8886);  // mov  [rsi+delta], al
-            uint32_t delta = operand;
-            asmbuf_immediate(buf, 4, &delta);
-        } break;
-        case INS_HALT:
-            if (mode == MODE_FUNCTION) {
-                asmbuf_ins(buf, 3, 0x4881C4); // add  rsp, X
-                asmbuf_immediate(buf, 4, &memory_size);
-                asmbuf_ins(buf, 1, 0xC3); // ret
-            } else if (mode == MODE_STANDALONE) {
+            case INS_MOVE:
+                if (operand > 0) {
+                    asmbuf_ins(buf, 3, 0x4881C6); // add  rsi, X
+                } else {
+                    operand *= -1;
+                    asmbuf_ins(buf, 3, 0x4881EE); // sub  rsi, X
+                }
+                asmbuf_immediate(buf, 4, &operand);
+                break;
+            case INS_MUTATE:
+                if (operand > 0) {
+                    asmbuf_ins(buf, 2, 0x8006); // add  byte [rsi], X
+                } else {
+                    operand *= -1;
+                    asmbuf_ins(buf, 2, 0x802E); // sub  byte [rsi], X
+                }
+                asmbuf_immediate(buf, 1, &operand);
+                break;
+            case INS_CLEAR:
+                asmbuf_ins(buf, 3, 0xC60600); // mov  byte [rsi], 0
+                break;
+            case INS_IN:
                 asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
-                asmbuf_syscall(buf, SYS_exit);
-            }
-            break;
-        case INS_NOP:
-            break;
+                asmbuf_syscall(buf, SYS_read);
+                break;
+            case INS_OUT:
+                asmbuf_ins(buf, 5, 0xBF01000000); // mov  rdi, 1
+                asmbuf_syscall(buf, SYS_write);
+                break;
+            case INS_BRANCH: {
+                uint32_t delta = 0;
+                asmbuf_ins(buf, 3, 0x803E00); // cmp  byte [rsi], 0
+                asmbuf_ins(buf, 2, 0x0F84);
+                asmbuf_immediate(buf, 4, &delta); // patched by JUMP ']'
+            } break;
+            case INS_JUMP: {
+                uint32_t delta = table[operand];
+                delta -= buf->fill + 5;
+                asmbuf_ins(buf, 1, 0xE9); // jmp delta
+                asmbuf_immediate(buf, 4, &delta);
+                void *jz = &buf->code[table[operand] + 5];
+                uint32_t patch = buf->fill - table[operand] - 9;
+                memcpy(jz, &patch, 4); // patch previous branch '['
+            } break;
+            case INS_COPY: {
+                asmbuf_ins(buf, 2, 0x8A06);  // mov  al, [rsi]
+                asmbuf_ins(buf, 2, 0x8886);  // mov  [rsi+delta], al
+                uint32_t delta = operand;
+                asmbuf_immediate(buf, 4, &delta);
+            } break;
+            case INS_HALT:
+                if (mode == MODE_FUNCTION) {
+                    asmbuf_ins(buf, 3, 0x4881C4); // add  rsp, X
+                    asmbuf_immediate(buf, 4, &memory_size);
+                    asmbuf_ins(buf, 1, 0xC3); // ret
+                } else if (mode == MODE_STANDALONE) {
+                    asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
+                    asmbuf_syscall(buf, SYS_exit);
+                }
+                break;
+            case INS_NOP:
+                break;
         }
     }
     free(table);
@@ -509,7 +509,7 @@ elf_write(struct asmbuf *buf, FILE *elf)
             .sh_flags = SHF_ALLOC | SHF_EXECINSTR,
             .sh_addr = entry,
             .sh_offset =
-              sizeof(header) + sizeof(phdr) + sizeof(shdr) + sizeof(strtab),
+            sizeof(header) + sizeof(phdr) + sizeof(shdr) + sizeof(strtab),
             .sh_size = buf->fill,
             .sh_addralign = 1
         }
@@ -551,27 +551,27 @@ main(int argc, char **argv)
     int option;
     while ((option = getopt(argc, argv, "o:eiDhO:")) != -1) {
         switch (option) {
-        case 'o':
-            output = optarg;
-            break;
-        case 'O':
-            optimize = atoi(optarg);
-            break;
-        case 'e':
-            do_exec = true;
-            break;
-        case 'i':
-            do_interpret = true;
-            break;
-        case 'D':
-            do_debug = true;
-            break;
-        case 'h':
-            print_help(argv[0], stdout);
-            break;
-        default:
-            print_help(argv[0], stderr);
-            FATAL("invalid option");
+            case 'o':
+                output = optarg;
+                break;
+            case 'O':
+                optimize = atoi(optarg);
+                break;
+            case 'e':
+                do_exec = true;
+                break;
+            case 'i':
+                do_interpret = true;
+                break;
+            case 'D':
+                do_debug = true;
+                break;
+            case 'h':
+                print_help(argv[0], stdout);
+                break;
+            default:
+                print_help(argv[0], stderr);
+                FATAL("invalid option");
         }
     }
     if (optind >= argc)
