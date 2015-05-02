@@ -61,7 +61,7 @@ struct program {
     long *markers;
 };
 
-#define PROGRAM_INIT {0}
+#define PROGRAM_INIT {0, 0, NULL, 0, 0, NULL}
 #define PROGRAM (struct program){0}
 
 void program_mark(struct program *);
