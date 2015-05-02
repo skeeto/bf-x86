@@ -70,6 +70,7 @@ void program_add(struct program *, enum ins, long);
 void program_free(struct program *);
 void program_parse(struct program *, FILE *);
 void program_optimize(struct program *, int level);
+void program_strip_nops(struct program *);
 void program_print(const struct program *, FILE *);
 
 void
@@ -193,8 +194,8 @@ program_move(struct program *p, long dest, long src)
     }
 }
 
-static void
-program_remove_nop(struct program *p)
+void
+program_strip_nops(struct program *p)
 {
     for (size_t i = 0; i < p->count; i++) {
         if (p->ins[i].ins == INS_NOP) {
@@ -249,8 +250,6 @@ program_optimize(struct program *p, int level)
                 break;
         }
     }
-    if (level > 0)
-        program_remove_nop(p);
 }
 
 void
@@ -632,6 +631,8 @@ main(int argc, char **argv)
         program_print(&program, stderr);
 
     if (do_interpret) {
+        if (optimize > 2)
+            program_strip_nops(&program);
         interpret(&program, do_debug ? stderr : NULL);
     } else if (do_exec) {
         struct asmbuf *buf = compile(&program, MODE_FUNCTION);
