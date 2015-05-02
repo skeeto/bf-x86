@@ -180,6 +180,31 @@ program_parse(struct program *p, FILE *in)
     program_add(p, INS_HALT, 0);
 }
 
+static void
+program_move(struct program *p, long dest, long src)
+{
+    memcpy(&p->ins[dest], &p->ins[src], (p->count - src) * sizeof(p->ins[0]));
+    long cutsize = src - dest;
+    p->count -= cutsize;
+    for (size_t i = 0; i < p->count; i++) {
+        enum ins ins = p->ins[i].ins;
+        if ((ins == INS_BRANCH || ins == INS_JUMP) && p->ins[i].operand >= src)
+            p->ins[i].operand -= cutsize;
+    }
+}
+
+static void
+program_remove_nop(struct program *p)
+{
+    for (size_t i = 0; i < p->count; i++) {
+        if (p->ins[i].ins == INS_NOP) {
+            size_t end = i;
+            while (p->ins[++end].ins == INS_NOP);
+            program_move(p, i, end);
+        }
+    }
+}
+
 void
 program_optimize(struct program *p, int level)
 {
@@ -224,6 +249,8 @@ program_optimize(struct program *p, int level)
                 break;
         }
     }
+    if (level > 0)
+        program_remove_nop(p);
 }
 
 void
