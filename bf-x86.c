@@ -181,29 +181,15 @@ program_parse(struct program *p, FILE *in)
     program_add(p, INS_HALT, 0);
 }
 
-static void
-program_move(struct program *p, long dest, long src)
-{
-    memcpy(&p->ins[dest], &p->ins[src], (p->count - src) * sizeof(p->ins[0]));
-    long cutsize = src - dest;
-    p->count -= cutsize;
-    for (size_t i = 0; i < p->count; i++) {
-        enum ins ins = p->ins[i].ins;
-        if ((ins == INS_BRANCH || ins == INS_JUMP) && p->ins[i].operand >= src)
-            p->ins[i].operand -= cutsize;
-    }
-}
-
 void
 program_strip_nops(struct program *p)
 {
-    for (size_t i = 0; i < p->count; i++) {
-        if (p->ins[i].ins == INS_NOP) {
-            size_t end = i;
-            while (p->ins[++end].ins == INS_NOP);
-            program_move(p, i, end);
-        }
-    }
+    struct program copy = PROGRAM_INIT;
+    for (size_t i = 0; i < p->count; i++)
+        if (p->ins[i].ins != INS_NOP)
+            program_add(&copy, p->ins[i].ins, p->ins[i].operand);
+    program_free(p);
+    *p = copy;
 }
 
 void
@@ -250,6 +236,8 @@ program_optimize(struct program *p, int level)
                 break;
         }
     }
+    if (level > 0)
+        program_strip_nops(p);
 }
 
 void
@@ -631,8 +619,6 @@ main(int argc, char **argv)
         program_print(&program, stderr);
 
     if (do_interpret) {
-        if (optimize > 2)
-            program_strip_nops(&program);
         interpret(&program, do_debug ? stderr : NULL);
     } else if (do_exec) {
         struct asmbuf *buf = compile(&program, MODE_FUNCTION);
