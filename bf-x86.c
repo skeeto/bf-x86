@@ -479,8 +479,7 @@ void
 elf_write(struct asmbuf *buf, FILE *elf)
 {
     uint64_t entry = 0x400000;
-    char strtab[] = ".text\0.shstrtab\0";
-    Elf64_Ehdr header = {
+    Elf64_Ehdr ehdr = {
         .e_ident = {
             ELFMAG0, ELFMAG1, ELFMAG2, ELFMAG3,
             ELFCLASS64,
@@ -491,49 +490,23 @@ elf_write(struct asmbuf *buf, FILE *elf)
         .e_type = ET_EXEC,
         .e_machine = EM_X86_64,
         .e_version = EV_CURRENT,
-        .e_entry = entry,
+        .e_entry = entry + sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr),
         .e_phoff = sizeof(Elf64_Ehdr),
-        .e_shoff = sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr),
         .e_ehsize = sizeof(Elf64_Ehdr),
         .e_phentsize = sizeof(Elf64_Phdr),
         .e_phnum = 1,
-        .e_shentsize = sizeof(Elf64_Shdr),
-        .e_shnum = 2,
-        .e_shstrndx = 0
     };
     Elf64_Phdr phdr = {
         .p_type = PT_LOAD,
         .p_flags = PF_X | PF_R,
         .p_vaddr = entry,
-        .p_paddr = entry,
         .p_filesz = buf->fill,
         .p_memsz = buf->fill,
         .p_align = 0x200000
     };
-    Elf64_Shdr shdr[2] = {
-        {
-            .sh_name = 6,
-            .sh_type = SHT_STRTAB,
-            .sh_offset = sizeof(header) + sizeof(phdr) + sizeof(shdr),
-            .sh_size = sizeof(strtab),
-            .sh_addralign = 1
-        }, {
-            .sh_name = 0, // .text
-            .sh_type = SHT_PROGBITS,
-            .sh_flags = SHF_ALLOC | SHF_EXECINSTR,
-            .sh_addr = entry,
-            .sh_offset =
-            sizeof(header) + sizeof(phdr) + sizeof(shdr) + sizeof(strtab),
-            .sh_size = buf->fill,
-            .sh_addralign = 1
-        }
-    };
-    header.e_entry += shdr[1].sh_offset; // why?
 
-    fwrite(&header, sizeof(header), 1, elf);
+    fwrite(&ehdr, sizeof(ehdr), 1, elf);
     fwrite(&phdr, sizeof(phdr), 1, elf);
-    fwrite(&shdr, sizeof(shdr), 1, elf);
-    fwrite(strtab, sizeof(strtab), 1, elf);
     fwrite(buf->code, buf->fill, 1, elf);
 }
 
