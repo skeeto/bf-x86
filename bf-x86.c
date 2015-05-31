@@ -484,7 +484,6 @@ asmbuf_syscall(struct asmbuf *buf, int syscall)
         asmbuf_immediate(buf, 4, &n);
     }
     asmbuf_ins(buf, 2, 0x0F05);  // syscall
-
 }
 
 enum mode {
