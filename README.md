@@ -6,9 +6,8 @@ doesn't link to any standard libraries, instead making raw syscalls.
 It can optionally execute the compiled program directly in memory like
 a [JIT-compiler][jit].
 
-The optimizer nothing more than a simple instruction compression stage
-to accumulate multiple brainfuck instructions into single x86_64
-instructions.
+The compiler employs a [peephole optimizer][peep] to produce compiled
+programs that run quickly and efficiently.
 
 ## Usage
 
@@ -18,3 +17,4 @@ instructions.
 
 [bf]: https://esolangs.org/wiki/Brainfuck
 [jit]: http://nullprogram.com/blog/2015/03/19/
+[peep]: http://en.wikipedia.org/wiki/Peephole_optimization

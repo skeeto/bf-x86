@@ -1,4 +1,4 @@
-CFLAGS = -std=c99 -Wall -Wextra -g3 -fPIC -Os
+CFLAGS = -std=c99 -Wall -Wextra -Wno-missing-field-initializers -g3 -Os
 
 programs = bf-x86 samples/hanoi samples/mandelbrot samples/hello
 

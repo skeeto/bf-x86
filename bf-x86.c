@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <assert.h>
 #include <unistd.h>
 #include <getopt.h>
 #include <sys/stat.h>
@@ -30,7 +31,7 @@ enum ins {
     INS_JUMP,
     INS_HALT,
     INS_CLEAR,
-    INS_COPY,
+    INS_ADD,
     INS_NOP
 };
 
@@ -39,7 +40,7 @@ instruction_name(enum ins ins)
 {
     static const char *const names[] = {
         "MOVE", "MUTATE", "IN", "OUT", "BRANCH",
-        "JUMP", "HALT", "CLEAR", "COPY", "NOP"
+        "JUMP", "HALT", "CLEAR", "ADD", "NOP"
     };
     return names[ins];
 }
@@ -108,7 +109,7 @@ program_add(struct program *p, enum ins ins, long operand)
         case INS_OUT:
         case INS_HALT:
         case INS_CLEAR:
-        case INS_COPY:
+        case INS_ADD:
         case INS_NOP:
             /* Nothing */
             break;
@@ -192,52 +193,166 @@ program_strip_nops(struct program *p)
     *p = copy;
 }
 
+enum optype {OP_ANY, OP_CONSTANT, OP_STORE, OP_LOAD, OP_LOAD_NEG};
+
+struct pattern {
+    enum ins ins;
+    enum optype optype;
+    long operand;
+};
+
+struct optimization {
+    const char *name;
+    struct pattern *sequence;
+    struct pattern *replacement;
+};
+
 void
-program_optimize(struct program *p, int level)
+optimize_replace(struct program *p, long i, struct optimization *o, long *vars)
 {
-    for (size_t i = 0; i < p->count; i++) {
-        switch (p->ins[i].ins) {
-            case INS_MOVE:
-            case INS_MUTATE: {
-                if (level >= 1) {
-                    size_t f = i + 1;
-                    while (p->ins[i].ins == p->ins[f].ins) {
-                        p->ins[f].ins = INS_NOP;
-                        p->ins[i].operand += p->ins[f].operand;
-                        f++;
-                    }
-                }
-                if (p->ins[i].operand == 0)
-                    p->ins[i].ins = INS_NOP;
-            } break;
-            case INS_BRANCH:
-                if (level >= 2) {
-                    /* Look for [-] or [+]. */
-                    enum ins i1 = p->ins[i + 1].ins;
-                    enum ins i2 = p->ins[i + 2].ins;
-                    long v1 = p->ins[i + 1].operand;
-                    if (v1 < 1)
-                        v1 *= -1;
-                    if (i1 == INS_MUTATE && v1 == 1 && i2 == INS_JUMP) {
-                        p->ins[i].ins = INS_CLEAR;
-                        p->ins[i + 1].ins = INS_NOP;
-                        p->ins[i + 2].ins = INS_NOP;
-                    }
-                }
+    for (long n = 0; o->sequence[n].ins != INS_NOP; n++) {
+        p->ins[i + n].ins = o->replacement[n].ins;
+        switch (o->replacement[n].optype) {
+            case OP_CONSTANT:
+                p->ins[i + n].operand = o->replacement[n].operand;
                 break;
-            case INS_IN:
-            case INS_OUT:
-            case INS_JUMP:
-            case INS_HALT:
-            case INS_CLEAR:
-            case INS_COPY:
-            case INS_NOP:
-                /* Nothing */
+            case OP_LOAD:
+                p->ins[i + n].operand = vars[o->replacement[n].operand];
+                break;
+            case OP_LOAD_NEG:
+                p->ins[i + n].operand = -vars[o->replacement[n].operand];
+                break;
+            case OP_ANY:
+                break;
+            case OP_STORE:
+                assert(!"invalid replacement");
                 break;
         }
     }
-    if (level > 0)
+}
+
+long
+optimize_apply(struct program *p, struct optimization *o)
+{
+    long count = 0;
+    long variables[16] = {0};
+    for (size_t i = 0; i < p->count; i++) {
+        long length = 0;
+        for (size_t n = 0;
+             o->sequence[n].ins != INS_NOP && i + n < p->count;
+             n++) {
+            enum ins ins = p->ins[i + n].ins;
+            long operand = p->ins[i + n].operand;
+            if (ins != o->sequence[n].ins) {
+                length = 0;
+                break;
+            }
+            length++;
+            enum optype o_type = o->sequence[n].optype;
+            long o_operand = o->sequence[n].operand;
+            switch (o_type) {
+                case OP_CONSTANT:
+                    if (operand != o_operand)
+                        length = 0;
+                    break;
+                case OP_STORE:
+                    variables[o_operand] = operand;
+                    break;
+                case OP_LOAD:
+                    if (operand != variables[o_operand])
+                        length = 0;
+                    break;
+                case OP_LOAD_NEG:
+                    if (operand != -variables[o_operand])
+                        length = 0;
+                    break;
+                case OP_ANY:
+                    break;
+            }
+            if (length == 0)
+                break;
+        }
+        if (length > 0) {
+            optimize_replace(p, i, o, variables);
+            i += length;
+            count++;
+        }
+    }
+    if (count > 0)
         program_strip_nops(p);
+    return count;
+}
+
+/* [-] */
+struct optimization optimization_clear = {
+    .name = "Cell clear",
+    .sequence = (struct pattern []){
+        {INS_BRANCH},
+        {INS_MUTATE, OP_CONSTANT, -1},
+        {INS_JUMP},
+        {INS_NOP}
+    },
+    .replacement = (struct pattern []){
+        {INS_CLEAR},
+        {INS_NOP},
+        {INS_NOP}
+    }
+};
+
+/* [->+<] */
+struct optimization optimization_add = {
+    .name = "Cell add",
+    .sequence = (struct pattern []){
+        {INS_BRANCH},
+        {INS_MUTATE, OP_CONSTANT, -1},
+        {INS_MOVE, OP_STORE, 0},
+        {INS_MUTATE, OP_CONSTANT, 1},
+        {INS_MOVE, OP_LOAD_NEG, 0},
+        {INS_JUMP},
+        {INS_NOP}
+    },
+    .replacement = (struct pattern []){
+        {INS_ADD, OP_LOAD, 0},
+        {INS_CLEAR},
+        {INS_NOP},
+        {INS_NOP},
+        {INS_NOP},
+        {INS_NOP}
+    }
+};
+
+void
+program_compress(struct program *p)
+{
+    for (size_t i = 0; i < p->count; i++) {
+        if (p->ins[i].ins == INS_MOVE || p->ins[i].ins == INS_MUTATE) {
+            size_t f = i + 1;
+            while (p->ins[i].ins == p->ins[f].ins) {
+                p->ins[f].ins = INS_NOP;
+                p->ins[i].operand += p->ins[f].operand;
+                f++;
+            }
+            if (p->ins[i].operand == 0)
+                p->ins[i].ins = INS_NOP;
+        }
+    }
+    program_strip_nops(p);
+}
+
+void
+program_optimize(struct program *p, int level)
+{
+    if (level == 0)
+        return;
+    program_compress(p);
+    long count = 0;
+    do {
+        count = 0;
+        if (level >= 2)
+            count += optimize_apply(p, &optimization_clear);
+        if (level >= 3)
+            count += optimize_apply(p, &optimization_add);
+    } while (count > 0);
 }
 
 void
@@ -295,8 +410,8 @@ interpret(const struct program *program, FILE *trace)
             case INS_CLEAR:
                 memory[dp] = 0;
                 break;
-            case INS_COPY:
-                memory[dp + operand] = memory[dp];
+            case INS_ADD:
+                memory[dp + operand] += memory[dp];
                 break;
             case INS_NOP:
                 break;
@@ -360,7 +475,7 @@ void
 asmbuf_syscall(struct asmbuf *buf, int syscall)
 {
     if (syscall == 0) {
-        asmbuf_ins(buf, 3, 0x4831C0); // xor  rax, rax
+        asmbuf_ins(buf, 2, 0x31C0); // xor  eax, eax
     } else {
         asmbuf_ins(buf, 1, 0xB8);  // mov  rax, syscall
         uint32_t n = syscall;
@@ -449,9 +564,9 @@ compile(const struct program *program, enum mode mode)
                 uint32_t patch = buf->fill - table[operand] - 9;
                 memcpy(jz, &patch, 4); // patch previous branch '['
             } break;
-            case INS_COPY: {
+            case INS_ADD: {
                 asmbuf_ins(buf, 2, 0x8A06);  // mov  al, [rsi]
-                asmbuf_ins(buf, 2, 0x8886);  // mov  [rsi+delta], al
+                asmbuf_ins(buf, 2, 0x0086);  // add  [rsi+delta], al
                 uint32_t delta = operand;
                 asmbuf_immediate(buf, 4, &delta);
             } break;
