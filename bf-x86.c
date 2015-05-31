@@ -476,6 +476,8 @@ asmbuf_syscall(struct asmbuf *buf, int syscall)
 {
     if (syscall == 0) {
         asmbuf_ins(buf, 2, 0x31C0); // xor  eax, eax
+    } else if (syscall == 1) {
+        asmbuf_ins(buf, 3, 0x4C89E0); // mov rax, r12
     } else {
         asmbuf_ins(buf, 1, 0xB8);  // mov  rax, syscall
         uint32_t n = syscall;
@@ -497,6 +499,14 @@ compile(const struct program *program, enum mode mode)
     uint32_t memory_size = MEMORY_SIZE;
     struct asmbuf *buf = asmbuf_create();
 
+    /* Clear zero register */
+    if (mode == MODE_FUNCTION) {
+        asmbuf_ins(buf, 1, 0x53); // push rbx
+        asmbuf_ins(buf, 2, 0x4154); // push r12
+    }
+    asmbuf_ins(buf, 2, 0x31dB); // xor ebx, ebx
+    asmbuf_ins(buf, 6, 0x41BC01000000); // mov r12, 1
+
     /* Allocate BF array on stack */
     asmbuf_ins(buf, 3, 0x4881EC); // sub  rsp, X
     asmbuf_immediate(buf, 4, &memory_size);
@@ -513,6 +523,8 @@ compile(const struct program *program, enum mode mode)
     /* rsi - data pointer
      * rdi - syscall argument
      * rax - temp
+     * rbx - zero register
+     * r12 - one register
      */
     uint32_t *table = malloc(sizeof(table[0]) * program->count);
     for (size_t i = 0; i < program->count; i++) {
@@ -521,13 +533,23 @@ compile(const struct program *program, enum mode mode)
         table[i] = buf->fill;
         switch (ins) {
             case INS_MOVE:
-                if (operand > 0) {
-                    asmbuf_ins(buf, 3, 0x4881C6); // add  rsi, X
+                if (operand > -256 && operand < 256) {
+                    if (operand > 0) {
+                        asmbuf_ins(buf, 3, 0x4883C6); // add  rsi, byte X
+                    } else {
+                        operand *= -1;
+                        asmbuf_ins(buf, 3, 0x4883EE); // sub  rsi, byte X
+                    }
+                    asmbuf_immediate(buf, 1, &operand);
                 } else {
-                    operand *= -1;
-                    asmbuf_ins(buf, 3, 0x4881EE); // sub  rsi, X
+                    if (operand > 0) {
+                        asmbuf_ins(buf, 3, 0x4881C6); // add  rsi, X
+                    } else {
+                        operand *= -1;
+                        asmbuf_ins(buf, 3, 0x4881EE); // sub  rsi, X
+                    }
+                    asmbuf_immediate(buf, 4, &operand);
                 }
-                asmbuf_immediate(buf, 4, &operand);
                 break;
             case INS_MUTATE:
                 if (operand > 0) {
@@ -539,20 +561,20 @@ compile(const struct program *program, enum mode mode)
                 asmbuf_immediate(buf, 1, &operand);
                 break;
             case INS_CLEAR:
-                asmbuf_ins(buf, 3, 0xC60600); // mov  byte [rsi], 0
+                asmbuf_ins(buf, 2, 0x881e); // mov  [rsi], bl
                 break;
             case INS_IN:
                 asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
                 asmbuf_syscall(buf, SYS_read);
                 break;
             case INS_OUT:
-                asmbuf_ins(buf, 5, 0xBF01000000); // mov  rdi, 1
+                asmbuf_ins(buf, 3, 0x4C89E7); // mov  rdi, r12
                 asmbuf_syscall(buf, SYS_write);
                 break;
             case INS_BRANCH: {
                 uint32_t delta = 0;
-                asmbuf_ins(buf, 3, 0x803E00); // cmp  byte [rsi], 0
-                asmbuf_ins(buf, 2, 0x0F84);
+                asmbuf_ins(buf, 2, 0x381E); // cmp  [rsi], bl
+                asmbuf_ins(buf, 2, 0x0F84); // jz
                 asmbuf_immediate(buf, 4, &delta); // patched by JUMP ']'
             } break;
             case INS_JUMP: {
@@ -560,20 +582,27 @@ compile(const struct program *program, enum mode mode)
                 delta -= buf->fill + 5;
                 asmbuf_ins(buf, 1, 0xE9); // jmp delta
                 asmbuf_immediate(buf, 4, &delta);
-                void *jz = &buf->code[table[operand] + 5];
-                uint32_t patch = buf->fill - table[operand] - 9;
+                void *jz = &buf->code[table[operand] + 4];
+                uint32_t patch = buf->fill - table[operand] - 8;
                 memcpy(jz, &patch, 4); // patch previous branch '['
             } break;
             case INS_ADD: {
                 asmbuf_ins(buf, 2, 0x8A06);  // mov  al, [rsi]
-                asmbuf_ins(buf, 2, 0x0086);  // add  [rsi+delta], al
                 uint32_t delta = operand;
-                asmbuf_immediate(buf, 4, &delta);
+                if (operand >= -128 && operand < 127) {
+                    asmbuf_ins(buf, 2, 0x0046);  // add  [rsi+delta], al
+                    asmbuf_immediate(buf, 1, &delta);
+                } else {
+                    asmbuf_ins(buf, 2, 0x0086);  // add  [rsi+delta], al
+                    asmbuf_immediate(buf, 4, &delta);
+                }
             } break;
             case INS_HALT:
                 if (mode == MODE_FUNCTION) {
                     asmbuf_ins(buf, 3, 0x4881C4); // add  rsp, X
                     asmbuf_immediate(buf, 4, &memory_size);
+                    asmbuf_ins(buf, 2, 0x415C); // pop r12
+                    asmbuf_ins(buf, 1, 0x5B); // pop rbx
                     asmbuf_ins(buf, 1, 0xC3); // ret
                 } else if (mode == MODE_STANDALONE) {
                     asmbuf_ins(buf, 3, 0x4831FF); // xor  rdi, rdi
