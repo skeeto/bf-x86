@@ -15,6 +15,14 @@ programs that run quickly and efficiently.
     $ ./hello
     Hello, world!
 
+## Additional Resources
+
+* [some brainfuck fluff](http://www.hevanet.com/cristofd/brainfuck/)
+* [Fast Brainfuck interpreter bff4.c](http://mazonka.com/brainf/)
+* [brain------------------------------------------------------fuck.com](http://www.brain------------------------------------------------------fuck.com/)
+* [Esoland Brainfuck](https://esolangs.org/wiki/Brainfuck)
+* [The Brainf*ck CPU](http://www.clifford.at/bfcpu/)
+
 [bf]: https://esolangs.org/wiki/Brainfuck
 [jit]: http://nullprogram.com/blog/2015/03/19/
 [peep]: http://en.wikipedia.org/wiki/Peephole_optimization
