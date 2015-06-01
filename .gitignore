@@ -1,4 +1,6 @@
 bf-x86
 samples/hanoi
 samples/mandelbrot
+samples/fib
+samples/wc
 samples/hello
