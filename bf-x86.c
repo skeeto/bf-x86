@@ -98,7 +98,7 @@ program_add(struct program *p, enum ins ins, long operand)
             break;
         case INS_JUMP: {
             long sibling = program_unmark(p);
-            if (operand < 0)
+            if (sibling < 0)
                 FATAL("unmatched ']'");
             p->ins[sibling].operand = p->count + 1;
             operand = sibling;
