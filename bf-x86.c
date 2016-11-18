@@ -621,7 +621,7 @@ compile(const struct program *program, enum mode mode)
 void
 elf_write(struct asmbuf *buf, FILE *elf)
 {
-    uint64_t entry = 0x400000;
+    uint64_t entry = 0x400000 + sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr);
     Elf64_Ehdr ehdr = {
         .e_ident = {
             ELFMAG0, ELFMAG1, ELFMAG2, ELFMAG3,
@@ -633,7 +633,7 @@ elf_write(struct asmbuf *buf, FILE *elf)
         .e_type = ET_EXEC,
         .e_machine = EM_X86_64,
         .e_version = EV_CURRENT,
-        .e_entry = entry + sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr),
+        .e_entry = entry,
         .e_phoff = sizeof(Elf64_Ehdr),
         .e_ehsize = sizeof(Elf64_Ehdr),
         .e_phentsize = sizeof(Elf64_Phdr),
@@ -642,10 +642,11 @@ elf_write(struct asmbuf *buf, FILE *elf)
     Elf64_Phdr phdr = {
         .p_type = PT_LOAD,
         .p_flags = PF_X | PF_R,
+        .p_offset = sizeof(Elf64_Ehdr) + sizeof(Elf64_Phdr),
         .p_vaddr = entry,
         .p_filesz = buf->fill,
         .p_memsz = buf->fill,
-        .p_align = 0x200000
+        .p_align = 0,
     };
 
     fwrite(&ehdr, sizeof(ehdr), 1, elf);
