@@ -21,8 +21,10 @@ programs that run quickly and efficiently.
 * [Fast Brainfuck interpreter bff4.c](http://mazonka.com/brainf/)
 * [brain------------------------------------------------------fuck.com](http://www.brain------------------------------------------------------fuck.com/)
 * [Esoland Brainfuck](https://esolangs.org/wiki/Brainfuck)
-* [The Brainf*ck CPU](http://www.clifford.at/bfcpu/)
+* [The Brainf\*ck CPU](http://www.clifford.at/bfcpu/)
+* [Přemysl Eric Janouch's compiler with IR and DWARF debugging][janouch]
 
 [bf]: https://esolangs.org/wiki/Brainfuck
+[janouch]: https://git.janouch.name/p/bfc
 [jit]: http://nullprogram.com/blog/2015/03/19/
 [peep]: http://en.wikipedia.org/wiki/Peephole_optimization
