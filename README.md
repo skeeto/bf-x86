@@ -19,9 +19,7 @@ programs that run quickly and efficiently.
 
 * [some brainfuck fluff](http://www.hevanet.com/cristofd/brainfuck/)
 * [Fast Brainfuck interpreter bff4.c](http://mazonka.com/brainf/)
-* [brain------------------------------------------------------fuck.com](http://www.brain------------------------------------------------------fuck.com/)
 * [Esoland Brainfuck](https://esolangs.org/wiki/Brainfuck)
-* [The Brainf\*ck CPU](http://www.clifford.at/bfcpu/)
 * [Přemysl Eric Janouch's compiler with IR and DWARF debugging][janouch]
 
 [bf]: https://esolangs.org/wiki/Brainfuck
