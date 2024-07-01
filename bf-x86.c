@@ -531,31 +531,16 @@ compile(const struct program *program, enum mode mode)
         table[i] = buf->fill;
         switch (ins) {
             case INS_MOVE:
-                if (operand > -256 && operand < 256) {
-                    if (operand > 0) {
-                        asmbuf_ins(buf, 3, 0x4883C6); // add  rsi, byte X
-                    } else {
-                        operand *= -1;
-                        asmbuf_ins(buf, 3, 0x4883EE); // sub  rsi, byte X
-                    }
+                if (operand >= -128 && operand <= 127) {
+                    asmbuf_ins(buf, 3, 0x4883C6); // add  rsi, byte X
                     asmbuf_immediate(buf, 1, &operand);
                 } else {
-                    if (operand > 0) {
-                        asmbuf_ins(buf, 3, 0x4881C6); // add  rsi, X
-                    } else {
-                        operand *= -1;
-                        asmbuf_ins(buf, 3, 0x4881EE); // sub  rsi, X
-                    }
+                    asmbuf_ins(buf, 3, 0x4881C6); // add  rsi, X
                     asmbuf_immediate(buf, 4, &operand);
                 }
                 break;
             case INS_MUTATE:
-                if (operand > 0) {
-                    asmbuf_ins(buf, 2, 0x8006); // add  byte [rsi], X
-                } else {
-                    operand *= -1;
-                    asmbuf_ins(buf, 2, 0x802E); // sub  byte [rsi], X
-                }
+                asmbuf_ins(buf, 2, 0x8006); // add  byte [rsi], X
                 asmbuf_immediate(buf, 1, &operand);
                 break;
             case INS_CLEAR:
