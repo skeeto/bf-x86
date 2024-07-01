@@ -436,10 +436,9 @@ void           asmbuf_syscall(struct asmbuf *, int);
 struct asmbuf *
 asmbuf_create(void)
 {
-    long page_size = sysconf(_SC_PAGESIZE);
     int prot = PROT_READ | PROT_WRITE;
     int flags = MAP_ANONYMOUS | MAP_PRIVATE;
-    size_t size = page_size * 1024;
+    size_t size = 1<<28;  // TODO: grow as needed?
     struct asmbuf *buf = mmap(NULL, size, prot, flags, -1, 0);
     buf->size = size;
     return buf;
